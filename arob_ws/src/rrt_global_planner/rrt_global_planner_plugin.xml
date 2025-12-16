@@ -1,0 +1,5 @@
+<library path="rrt_global_planner_plugin">
+	<class name="rrt_global_planner/RRTPlanner" type="rrt_global_planner::RRTPlanner" base_class_type="nav2_core::GlobalPlanner">
+	  <description>This is an RRT planner plugin.</description>
+	</class>
+</library>

@@ -1,0 +1,28 @@
+services:
+  arob_lab:
+    image: arob_lab
+    build:
+      context: ./
+      dockerfile: docker/Dockerfile
+    container_name: arob_lab
+    environment:
+      DISPLAY: $DISPLAY
+      # In Windows, use the following lines instead:
+      # DISPLAY: host.docker.internal:0
+      # QT_X11_NO_MITSHM: 1
+      # Set a ROS_DOMAIN_ID to avoid collision with other ROS environemts in your network.
+      ROS_DOMAIN_ID: 4
+      
+    privileged: true
+    volumes:
+      # X11. This is needed for the GUI to work on Windows.
+      - ~/.Xauthority:/root/.Xauthority
+      # This is needed to access the robot drivers or other connected sensors in case of using real hardware.
+      - /dev/:/dev
+      - ./arob_ws:/root/arob_ws
+
+    # We use the host network to have access to everything.
+    network_mode: "host"
+
+    # Keep the container running.
+    command: tail -f /dev/null
