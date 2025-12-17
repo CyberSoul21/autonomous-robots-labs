@@ -130,13 +130,14 @@ class DroneRaceNode(Node):
         x = np.array([p.x, p.y, p.z, v.x, v.y, v.z, yaw], dtype=float)
         return x     
     # Cost uses reference Position_ref(t), Velocity_ref(t), yaw_ref(t) along the horizon
-    def ref_at_time(self, t: float):
+    def ref_at_time(self, t):
         """
         Returns reference position, velocity, yaw at time t (seconds since trajectory start).
         """
         # pick the reference point on your precomputed trajectory at time t:
         # Clamp into trajectory time range
         # Clamping guarantees: reference lookup always returns a valid point.
+        t = float(t)
         t = float(np.clip(t, float(self.traj_times[0]), float(self.traj_times[-1])))
 
         # Nearest neighbor (simple, fast). You can upgrade to interpolation later.
@@ -153,7 +154,68 @@ class DroneRaceNode(Node):
         else:
             yaw_ref = 0.0
 
-        return pref, vref, yaw_ref    
+        return pref, vref, yaw_ref   
+
+    # Dynamics model for rollouts
+    def dynamics_step(self, x: np.ndarray, u: np.ndarray) -> np.ndarray:
+        """
+        x = [px,py,pz,vx,vy,vz,yaw]
+        u = [vx_cmd, vy_cmd, vz_cmd, yaw_rate_cmd]
+        """
+        dt = self.mppi_dt
+        tau = 0.25  # velocity tracking aggressiveness
+
+        p = x[0:3]
+        v = x[3:6]
+        yaw = x[6]
+
+        v_cmd = u[0:3]
+        r_cmd = u[3]
+
+        v_next = v + (dt / tau) * (v_cmd - v)
+        p_next = p + dt * v_next
+        yaw_next = self.wrap_pi(yaw + dt * r_cmd)
+
+        x_next = x.copy()
+        x_next[0:3] = p_next
+        x_next[3:6] = v_next
+        x_next[6] = yaw_next
+        return x_next    
+    
+    # Cost function
+    def rollout_cost(self, X: np.ndarray, U: np.ndarray, t0: float) -> float:
+        """
+        X shape: (T+1, 7), U shape: (T, 4)
+        t0: start time on the reference trajectory (seconds)
+        """
+        J = 0.0
+        prev_u = U[0]
+
+        for t in range(self.mppi_T):
+            pref, vref, yaw_ref = self.ref_at_time(t0 + t * self.mppi_dt)
+
+            p = X[t+1, 0:3]
+            v = X[t+1, 3:6]
+            yaw = X[t+1, 6]
+            u = U[t]
+
+            #This is the squared Euclidean distance to the reference.
+            pos_err = p - pref
+            vel_err = v - vref
+            yaw_err = self.wrap_pi(yaw - yaw_ref)
+
+            #This cost comes directly from optimal control theory.
+            # This is standard MPC / LQR / MPPI theory:
+            J += self.w_pos * float(pos_err @ pos_err)
+            J += self.w_vel * float(vel_err @ vel_err)
+            J += self.w_yaw * float(yaw_err * yaw_err)
+
+            J += self.w_u * float(u @ u)
+            du = u - prev_u
+            J += self.w_du * float(du @ du)
+            prev_u = u
+
+        return J
     ################################################################################
 
     def start_drone(self):
