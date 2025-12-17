@@ -24,6 +24,15 @@ import time
 
 class DroneRaceNode(Node):
     def __init__(self):
+
+        # ===== Debug / logging state (once per tick) =====
+        self._last_tick_wall = None
+        self._u_prev = np.zeros(4, dtype=float)
+
+        # throttle logs (log every N ticks)
+        self._tick_i = 0
+        self._log_every = 10   # with 0.1s timer -> logs every 1s
+
         super().__init__('drone_race_node')
 
         self.uav = None
@@ -75,11 +84,12 @@ class DroneRaceNode(Node):
 
         ################################################################################
         ##### MPPI params #####
-        self.mppi_dt = 0.05            # should match your timer period in velocity mode
+        self.mppi_dt = 0.1#0.05            # should match your timer period in velocity mode
         self.mppi_T  = 10#25              # horizon steps (25*0.05=1.25s)
         self.mppi_K  = 64 #512             # rollouts
-        self.mppi_lambda = 1.0         # temperature
-
+        self.mppi_lambda = 8.0#5.0#1.0         # temperature
+        self.idx_progress = 0          # current progress along trajectory
+        self.lookahead_steps = 5       # ~0.5s if dt=0.1, or ~0.25s if dt=0.05
         # Control limits [vx, vy, vz, yaw_rate]
         #self.u_min = np.array([-2.0, -2.0, -1.0, -2.0], dtype=float)
         #self.u_max = np.array([ 2.0,  2.0,  1.0,  2.0], dtype=float)
@@ -88,14 +98,14 @@ class DroneRaceNode(Node):
         self.u_max = np.array([ 2.5,  2.5,  1.5,  2.0], dtype=float)
 
         # Exploration noise std
-        # self.noise_std = np.array([0.6, 0.6, 0.4, 0.7], dtype=float)
+        #self.noise_std = np.array([0.6, 0.6, 0.4, 0.7], dtype=float) # best performance!!
         # Increased exploration
-        self.noise_std = np.array([0.4, 0.4, 0.25, 0.4], dtype=float)
+        self.noise_std = np.array([0.4, 0.4, 0.25, 0.4], dtype=float) # best performance!!
 
         # Cost weights
-        self.w_pos = 25.0#12.0
+        self.w_pos = 25.0
         self.w_vel = 3.0
-        self.w_yaw = 0.0#0.5
+        self.w_yaw = 0.1#0.5
         self.w_u   = 0.01#0.05
         self.w_du  = 0.05#0.2
 
@@ -104,6 +114,14 @@ class DroneRaceNode(Node):
 
         # For time alignment with your generated trajectory
         self.t_start_wall = None  # set on first control tick
+
+        # --- MPPI stats for tuning ---
+        self._compute_ms = 0.0
+        self._Jmin  = 0.0
+        self._Jmean = 0.0
+        self._Jstd  = 0.0
+        self._ESS   = 0.0
+
         ################################################################################
 
     # MPPI 
@@ -166,46 +184,6 @@ class DroneRaceNode(Node):
 
         return pref, vref, yaw_ref
     
-    """
-    def ref_at_time(self, t):
-        
-        #Returns reference position, velocity, yaw at time t (seconds since trajectory start).
-        
-        t = float(t)
-        t_clamped = float(np.clip(t, float(self.traj_times[0]), float(self.traj_times[-1])))
-        
-        # ADD THIS WARNING
-        if abs(t - t_clamped) > 0.01:  # If clamping happened
-            if not hasattr(self, '_clamp_warned'):
-                self._clamp_warned = True
-                self.get_logger().warn(
-                    f'Time clamping: t={t:.2f} -> {t_clamped:.2f}, '
-                    f'traj range=[{self.traj_times[0]:.2f}, {self.traj_times[-1]:.2f}]'
-                )
-        
-        idx = int(np.argmin(np.abs(self.traj_times - t_clamped)))
-        
-        pref = self.traj_positions[idx].copy()
-        vref = self.traj_velocities[idx].copy()
-        
-        # ADD THIS LOG (only occasionally)
-        if not hasattr(self, '_ref_log_counter'):
-            self._ref_log_counter = 0
-        self._ref_log_counter += 1
-        if self._ref_log_counter % 100 == 0:  # Log every 5 seconds at 50ms
-            self.get_logger().info(
-                f'ref_at_time: t={t:.2f}, idx={idx}/{len(self.traj_times)}, '
-                f'pref=[{pref[0]:.3f}, {pref[1]:.3f}, {pref[2]:.3f}]'
-            )
-        
-        speed = np.linalg.norm(vref)
-        if speed > 1e-3:
-            yaw_ref = math.atan2(vref[1], vref[0])
-        else:
-            yaw_ref = 0.0
-        
-        return pref, vref, yaw_ref   
-    """
     # Dynamics model for rollouts
     def dynamics_step(self, x, u):
         """
@@ -213,7 +191,7 @@ class DroneRaceNode(Node):
         u = [vx_cmd, vy_cmd, vz_cmd, yaw_rate_cmd]
         """
         dt = self.mppi_dt
-        tau = 0.2 #0.25  # velocity tracking aggressiveness
+        tau = 0.25  # velocity tracking aggressiveness
 
         p = x[0:3]
         v = x[3:6]
@@ -233,7 +211,7 @@ class DroneRaceNode(Node):
         return x_next    
     
     # Cost function
-    def rollout_cost(self, X: np.ndarray, U: np.ndarray, t0: float) -> float:
+    def rollout_cost(self, X, U, t0):
         """
         X shape: (T+1, 7), U shape: (T, 4)
         t0: start time on the reference trajectory (seconds)
@@ -270,7 +248,7 @@ class DroneRaceNode(Node):
     # MPPI update   
     # https://acdslab.github.io/mppi-generic-website/docs/mppi.html
 
-    def mppi_optimize(self, x0: np.ndarray, t0):
+    def mppi_optimize(self, x0, t0):
         T = self.mppi_T
         K = self.mppi_K
 
@@ -298,7 +276,35 @@ class DroneRaceNode(Node):
         # Shift for next iteration
         self.U[:-1] = self.U[1:]
         self.U[-1] = self.U[-2]
+
+        # --- MPPI stats for tuning ---
+        self._Jmin  = float(np.min(costs))
+        self._Jmean = float(np.mean(costs))
+        self._Jstd  = float(np.std(costs))
+        self._ESS   = float(1.0 / (np.sum(w * w) + 1e-12))
+
         return u0
+    
+    #Always track the point on the trajectory that is closest to my current position (or slightly ahead).
+    def compute_progress_index(self, p_now):
+        """
+        Returns a trajectory index close to the drone's current position,
+        but never goes backwards (monotonic progress).
+        """
+        # Search only forward from current progress (fast + prevents jumping back)
+        window = 200  # how far ahead to search (tune if needed)
+        i0 = self.idx_progress
+        i1 = min(len(self.traj_times) - 1, i0 + window)
+
+        positions = self.traj_positions[i0:i1+1]         # (M,3)
+        d = np.linalg.norm(positions - p_now[None, :], axis=1)  # distances
+        j = int(np.argmin(d))                             # local index in window
+        idx_closest = i0 + j
+
+        # Never go backwards
+        self.idx_progress = max(self.idx_progress, idx_closest)
+
+        return self.idx_progress    
     ################################################################################
 
     def start_drone(self):
@@ -554,7 +560,7 @@ class DroneRaceNode(Node):
         self.trajectory = traj_gen
 
         # Store the trajectory in class variables
-        deltat = 0.05
+        deltat = 0.1#0.05
         t0 = float(self.trajectory.times[0])
         tf = float(self.trajectory.times[-1])
         n_steps = int(np.floor((tf - t0) / deltat)) + 1
@@ -867,16 +873,71 @@ class DroneRaceNode(Node):
         if self.t_start_wall is None:
             self.t_start_wall = now
 
+        x0 = self.get_state()
         # Time along the reference trajectory
         t_ref = now - self.t_start_wall
+        # #progress-based tracking
+        # p_now = x0[0:3]
+        # idx_closest = self.compute_progress_index(p_now)
+        # # Look ahead so we don't try to go exactly to the closest point (helps smooth following)
+        # idx_target = min(idx_closest + self.lookahead_steps, len(self.traj_times) - 1)
+        # t_ref = float(self.traj_times[idx_target])        
 
-        x0 = self.get_state()
+
+        # Reference at current time (for logging errors)
+        pref, vref, yaw_ref = self.ref_at_time(t_ref)
+
+        
         if x0 is None:
             return
         t0 = time.perf_counter()
         u0 = self.mppi_optimize(x0, t_ref)
         t1 = time.perf_counter()
-        self.get_logger().info(f"MPPI compute time: {(t1-t0)*1000:.1f} ms")
+        #self.get_logger().info(f"MPPI compute time: {(t1-t0)*1000:.1f} ms")
+
+
+
+        # --- tick timing ---
+        wall_now = time.perf_counter()
+        if self._last_tick_wall is None:
+            dt_wall = float('nan')
+        else:
+            dt_wall = wall_now - self._last_tick_wall
+        self._last_tick_wall = wall_now
+
+        # --- tracking errors ---
+        p = x0[0:3]
+        v = x0[3:6]
+        yaw = x0[6]
+        pos_err = float(np.linalg.norm(p - pref))
+        vel_err = float(np.linalg.norm(v - vref))
+        yaw_err = float(self.wrap_pi(yaw - yaw_ref))
+
+        # --- command diagnostics ---
+        du = float(np.linalg.norm(u0 - self._u_prev))
+        self._u_prev = u0.copy()
+
+        sat = [
+            abs(u0[0]) >= 0.95 * self.u_max[0],
+            abs(u0[1]) >= 0.95 * self.u_max[1],
+            abs(u0[2]) >= 0.95 * self.u_max[2],
+            abs(u0[3]) >= 0.95 * self.u_max[3],
+        ]
+
+        # --- MPPI stats (store these in mppi_optimize) ---
+        # self._Jmin, self._Jmean, self._Jstd, self._ESS
+
+        # self._tick_i += 1
+        # if self._tick_i % self._log_every == 0:
+        #     self.get_logger().info(
+        #         f"dt_wall={dt_wall*1000:5.1f}ms  mppi={((t1-t0)*1000):5.1f}ms  "
+        #         f"e_p={pos_err:4.2f}  e_v={vel_err:4.2f}  e_yaw={yaw_err:4.2f}  "
+        #         f"u=[{u0[0]:+.2f},{u0[1]:+.2f},{u0[2]:+.2f},{u0[3]:+.2f}]  "
+        #         f"du={du:4.2f}  sat={sat}  "
+        #         f"J(min/mean/std)={self._Jmin:.1f}/{self._Jmean:.1f}/{self._Jstd:.1f}  "
+        #         f"ESS={self._ESS:.1f}/{self.mppi_K}"
+        #     )   
+
         # Publish command
         msg = TwistStamped()
         msg.header.stamp = self.get_clock().now().to_msg()
