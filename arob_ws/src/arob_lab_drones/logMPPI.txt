@@ -1,0 +1,14 @@
+Drone Race Node launched
+Initializing Aerostack Drone
+Offboard
+Arm
+Take Off
+Drone ready to fly
+[ros2run]: Interrupt
+Drone Race Node launched
+Initializing Aerostack Drone
+Offboard
+Arm
+Take Off
+Drone ready to fly
+[ros2run]: Interrupt

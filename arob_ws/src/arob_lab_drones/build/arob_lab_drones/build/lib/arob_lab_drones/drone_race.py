@@ -76,28 +76,28 @@ class DroneRaceNode(Node):
         ################################################################################
         ##### MPPI params #####
         self.mppi_dt = 0.05            # should match your timer period in velocity mode
-        self.mppi_T  = 30#25              # horizon steps (25*0.05=1.25s)
-        self.mppi_K  = 1000 #512             # rollouts
+        self.mppi_T  = 10#25              # horizon steps (25*0.05=1.25s)
+        self.mppi_K  = 64 #512             # rollouts
         self.mppi_lambda = 1.0         # temperature
 
         # Control limits [vx, vy, vz, yaw_rate]
         #self.u_min = np.array([-2.0, -2.0, -1.0, -2.0], dtype=float)
         #self.u_max = np.array([ 2.0,  2.0,  1.0,  2.0], dtype=float)
 
-        self.u_min = np.array([-3.0, -3.0, -1.5, -2.5], dtype=float)
-        self.u_max = np.array([ 3.0,  3.0,  1.5,  2.5], dtype=float)
+        self.u_min = np.array([-2.5, -2.5, -1.5, -2.0], dtype=float)  # Slightly more aggressive
+        self.u_max = np.array([ 2.5,  2.5,  1.5,  2.0], dtype=float)
 
         # Exploration noise std
         # self.noise_std = np.array([0.6, 0.6, 0.4, 0.7], dtype=float)
         # Increased exploration
-        self.noise_std = np.array([0.5, 0.5, 0.3, 0.5], dtype=float)
+        self.noise_std = np.array([0.4, 0.4, 0.25, 0.4], dtype=float)
 
         # Cost weights
-        self.w_pos = 20.0#12.0
-        self.w_vel = 1.5
+        self.w_pos = 25.0#12.0
+        self.w_vel = 3.0
         self.w_yaw = 0.0#0.5
         self.w_u   = 0.01#0.05
-        self.w_du  = 0.1#0.2
+        self.w_du  = 0.05#0.2
 
         # Nominal control sequence U[t] = [vx, vy, vz, yaw_rate]
         self.U = np.zeros((self.mppi_T, 4), dtype=float)
@@ -134,20 +134,25 @@ class DroneRaceNode(Node):
 
         x = np.array([p.x, p.y, p.z, v.x, v.y, v.z, yaw], dtype=float)
         return x     
+    
     # Cost uses reference Position_ref(t), Velocity_ref(t), yaw_ref(t) along the horizon
     def ref_at_time(self, t):
-        """
-        Returns reference position, velocity, yaw at time t (seconds since trajectory start).
-        """
+        #
+        #Returns reference position, velocity, yaw at time t (seconds since trajectory start).
+        #
         # pick the reference point on your precomputed trajectory at time t:
         # Clamp into trajectory time range
         # Clamping guarantees: reference lookup always returns a valid point.
         t = float(t)
-        t = float(np.clip(t, float(self.traj_times[0]), float(self.traj_times[-1])))
+        #t = float(np.clip(t, float(self.traj_times[0]), float(self.traj_times[-1])))
 
         # Nearest neighbor (simple, fast). You can upgrade to interpolation later.
         # the sample whose timestamp is closest to the requested time t
-        idx = int(np.argmin(np.abs(self.traj_times - t))) # gives an array of differences to t, makes all differences positive, returns the index of the smallest difference
+        #idx = int(np.argmin(np.abs(self.traj_times - t))) # gives an array of differences to t, makes all differences positive, returns the index of the smallest difference
+
+
+        idx = int(round((t - self.traj_times[0]) / self.mppi_dt))
+        idx = max(0, min(idx, len(self.traj_times)-1))
 
         pref = self.traj_positions[idx].copy()
         vref = self.traj_velocities[idx].copy()
@@ -159,8 +164,48 @@ class DroneRaceNode(Node):
         else:
             yaw_ref = 0.0
 
+        return pref, vref, yaw_ref
+    
+    """
+    def ref_at_time(self, t):
+        
+        #Returns reference position, velocity, yaw at time t (seconds since trajectory start).
+        
+        t = float(t)
+        t_clamped = float(np.clip(t, float(self.traj_times[0]), float(self.traj_times[-1])))
+        
+        # ADD THIS WARNING
+        if abs(t - t_clamped) > 0.01:  # If clamping happened
+            if not hasattr(self, '_clamp_warned'):
+                self._clamp_warned = True
+                self.get_logger().warn(
+                    f'Time clamping: t={t:.2f} -> {t_clamped:.2f}, '
+                    f'traj range=[{self.traj_times[0]:.2f}, {self.traj_times[-1]:.2f}]'
+                )
+        
+        idx = int(np.argmin(np.abs(self.traj_times - t_clamped)))
+        
+        pref = self.traj_positions[idx].copy()
+        vref = self.traj_velocities[idx].copy()
+        
+        # ADD THIS LOG (only occasionally)
+        if not hasattr(self, '_ref_log_counter'):
+            self._ref_log_counter = 0
+        self._ref_log_counter += 1
+        if self._ref_log_counter % 100 == 0:  # Log every 5 seconds at 50ms
+            self.get_logger().info(
+                f'ref_at_time: t={t:.2f}, idx={idx}/{len(self.traj_times)}, '
+                f'pref=[{pref[0]:.3f}, {pref[1]:.3f}, {pref[2]:.3f}]'
+            )
+        
+        speed = np.linalg.norm(vref)
+        if speed > 1e-3:
+            yaw_ref = math.atan2(vref[1], vref[0])
+        else:
+            yaw_ref = 0.0
+        
         return pref, vref, yaw_ref   
-
+    """
     # Dynamics model for rollouts
     def dynamics_step(self, x, u):
         """
@@ -168,7 +213,7 @@ class DroneRaceNode(Node):
         u = [vx_cmd, vy_cmd, vz_cmd, yaw_rate_cmd]
         """
         dt = self.mppi_dt
-        tau = 0.25  # velocity tracking aggressiveness
+        tau = 0.2 #0.25  # velocity tracking aggressiveness
 
         p = x[0:3]
         v = x[3:6]
@@ -606,6 +651,66 @@ class DroneRaceNode(Node):
 
         self.get_logger().info("Trajectory successfully generated.")
 
+    def generate_simple_test(self):
+        """Dead simple trajectory for testing"""
+        traj_gen = TrajectoryGenerator()
+        
+        # Just a simple square at z=1.5m, SLOW
+        traj_gen.add_waypoint([0, 0, 1.0], 0)
+        traj_gen.add_waypoint([0, 0, 1.5], 3)   # Rise slowly
+        traj_gen.add_waypoint([1, 0, 1.5], 6)   # Move forward
+        traj_gen.add_waypoint([1, 1, 1.5], 9)   # Move right
+        traj_gen.add_waypoint([0, 1, 1.5], 12)  # Move back
+        traj_gen.add_waypoint([0, 0, 1.5], 15)  # Return
+        traj_gen.add_waypoint([0, 0, 1.0], 18)  # Land
+        
+        # Constraints
+        traj_gen.add_waypoint_constraint(derivative_order=1, wpt_index=0, value=[0.0, 0.0, 0.0], side="right")
+        traj_gen.add_waypoint_constraint(derivative_order=1, wpt_index=len(traj_gen.times)-1, value=[0,0,0], side="left")
+        traj_gen.add_waypoint_constraint(derivative_order=2, wpt_index=len(traj_gen.times)-1, value=[0,0,0], side="left")
+        
+        opts = SimpleNamespace(trajectory_type="minimum_snap", order=7, continuity_order=3, reg=1e-9, normalized=True)
+        traj_gen.generate_trajectory(opts)
+
+        # VERIFY the trajectory was actually generated
+        if not hasattr(traj_gen, 'trajectory') or traj_gen.trajectory is None:
+            self.get_logger().error("TRAJECTORY GENERATION FAILED!")
+            return
+        
+        self.trajectory = traj_gen
+        
+        # Store trajectory
+        deltat = 0.05
+        t0 = float(self.trajectory.times[0])
+        tf = float(self.trajectory.times[-1])
+
+        # ADD THESE LOGS:
+        #self.get_logger().info(f"Trajectory time range: t0={t0:.2f}s, tf={tf:.2f}s")
+        #self.get_logger().info(f"Waypoint times: {self.trajectory.times}")
+
+        n_steps = int(np.floor((tf - t0) / deltat)) + 1
+        ts = t0 + np.arange(n_steps, dtype=float) * deltat
+        if ts[-1] < tf - 1e-9:
+            ts = np.append(ts, tf)
+        
+        positions = np.zeros((ts.size, 3), dtype=float)
+        velocities = np.zeros((ts.size, 3), dtype=float)
+        
+        for i, t in enumerate(ts):
+            positions[i, :]  = traj_gen.evaluate_trajectory(t, derivative_order=0)
+            velocities[i, :] = traj_gen.evaluate_trajectory(t, derivative_order=1)
+        
+        self.traj_times = ts
+        self.traj_positions = positions
+        self.traj_velocities = velocities
+        
+        self.get_logger().info(f"Simple test trajectory: {tf}s duration")
+        # ADD THESE LOGS:
+        #self.get_logger().info(f"Stored trajectory samples: {len(self.traj_times)} points")
+        #self.get_logger().info(f"First 5 positions: {self.traj_positions[:5]}")
+        #self.get_logger().info(f"Last 5 positions: {self.traj_positions[-5:]}")
+        #self.get_logger().info(f"Position at t=10s: {self.traj_positions[int(10/deltat)]}")        
+
         
     def draw_trajectory_markers(
         self,
@@ -747,9 +852,11 @@ class DroneRaceNode(Node):
         if self.current_pose is None:
             return
         # Complete this function to publish position commands to follow the trajectory 
-    """
+    
     def velocity_timer_callback(self):
-        self.get_logger().info('velocity timer callback')       
+        #self.get_logger().info('velocity timer callback')       
+        #if int(time.time()) % 1 == 0:
+            #self.get_logger().info("velocity timer callback")
         if self.current_pose is None or self.current_twist is None:
             return
         if not hasattr(self, 'traj_times'):
@@ -766,9 +873,10 @@ class DroneRaceNode(Node):
         x0 = self.get_state()
         if x0 is None:
             return
-
+        #t0 = time.perf_counter()
         u0 = self.mppi_optimize(x0, t_ref)
-
+        #t1 = time.perf_counter()
+        #self.get_logger().info(f"MPPI compute time: {(t1-t0)*1000:.1f} ms")
         # Publish command
         msg = TwistStamped()
         msg.header.stamp = self.get_clock().now().to_msg()
@@ -778,49 +886,7 @@ class DroneRaceNode(Node):
         msg.twist.linear.z = float(u0[2])
         msg.twist.angular.z = float(u0[3])
         self.vel_command_publisher.publish(msg)        
-    """
-    def velocity_timer_callback(self):
-        self.get_logger().info('velocity timer callback')       
-        if self.current_pose is None or self.current_twist is None:
-            self.get_logger().warn('Missing pose or twist!')
-            return
-        if not hasattr(self, 'traj_times'):
-            self.get_logger().warn('No trajectory generated!')
-            return
-
-        # Start time reference
-        now = self.get_clock().now().nanoseconds * 1e-9
-        if self.t_start_wall is None:
-            self.t_start_wall = now
-            self.get_logger().info(f'MPPI started at t=0')
-
-        # Time along the reference trajectory
-        t_ref = now - self.t_start_wall
-
-        x0 = self.get_state()
-        if x0 is None:
-            self.get_logger().warn('State is None!')
-            return
-
-        # Get reference for debugging
-        pref, vref, yaw_ref = self.ref_at_time(t_ref)
-        pos_error = np.linalg.norm(x0[0:3] - pref)
-        
-        self.get_logger().info(f't_ref={t_ref:.2f}, pos_err={pos_error:.3f}m, ref_pos={pref}')
-
-        u0 = self.mppi_optimize(x0, t_ref)
-
-        self.get_logger().info(f'CMD: vx={u0[0]:.2f}, vy={u0[1]:.2f}, vz={u0[2]:.2f}, yaw_rate={u0[3]:.2f}')
-
-        # Publish command
-        msg = TwistStamped()
-        msg.header.stamp = self.get_clock().now().to_msg()
-        msg.header.frame_id = "earth"
-        msg.twist.linear.x = float(u0[0])
-        msg.twist.linear.y = float(u0[1])
-        msg.twist.linear.z = float(u0[2])
-        msg.twist.angular.z = float(u0[3])
-        self.vel_command_publisher.publish(msg)    
+  
 
 def main(args=None):
     rclpy.init(args=args)
@@ -844,7 +910,8 @@ def main(args=None):
     success = node.read_gates(filepath)
     if success:
         # node.generate_trajectory_example()
-        node.generate_trajectory()
+        node.generate_trajectory() #Original
+        #node.generate_simple_test()
         # Republish markers every 2 seconds so RViz always sees them
         node.create_timer(2.0, node.draw_gate_markers)
         node.create_timer(2.0, node.draw_trajectory_markers)
@@ -855,9 +922,11 @@ def main(args=None):
         node.start_drone()
         if cli_args.vel_control:
             node.get_logger().info('Controlling drone in VELOCITY mode')
+            #node.set_control_mode(yaw_mode=2, control_mode=3, reference_frame=2) # Velocity control #Original
             node.set_control_mode(yaw_mode=2, control_mode=3, reference_frame=2) # Velocity control
             sleep(2.0)
-            node.create_timer(0.05, node.velocity_timer_callback)
+            node.create_timer(0.05, node.velocity_timer_callback) # Original
+            node.create_timer(0.1, node.velocity_timer_callback)
         else:
             node.get_logger().info('Controlling drone in POSITION mode')
             node.set_control_mode(yaw_mode=1, control_mode=2, reference_frame=1) # Position control

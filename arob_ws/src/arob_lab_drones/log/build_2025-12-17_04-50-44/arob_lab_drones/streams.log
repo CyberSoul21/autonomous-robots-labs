@@ -1,0 +1,24 @@
+[0.741s] Invoking command in '/root/arob_ws/src/arob_lab_drones': PYTHONPATH=/root/arob_ws/src/arob_lab_drones/build/arob_lab_drones/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/root/arob_ws/src/arob_lab_drones/install/arob_lab_drones/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base build/arob_lab_drones build --build-base /root/arob_ws/src/arob_lab_drones/build/arob_lab_drones/build install --record /root/arob_ws/src/arob_lab_drones/build/arob_lab_drones/install.log --single-version-externally-managed install_data
+[1.014s] running egg_info
+[1.015s] writing build/arob_lab_drones/arob_lab_drones.egg-info/PKG-INFO
+[1.015s] writing dependency_links to build/arob_lab_drones/arob_lab_drones.egg-info/dependency_links.txt
+[1.015s] writing entry points to build/arob_lab_drones/arob_lab_drones.egg-info/entry_points.txt
+[1.015s] writing requirements to build/arob_lab_drones/arob_lab_drones.egg-info/requires.txt
+[1.015s] writing top-level names to build/arob_lab_drones/arob_lab_drones.egg-info/top_level.txt
+[1.018s] reading manifest file 'build/arob_lab_drones/arob_lab_drones.egg-info/SOURCES.txt'
+[1.031s] writing manifest file 'build/arob_lab_drones/arob_lab_drones.egg-info/SOURCES.txt'
+[1.031s] running build
+[1.031s] running build_py
+[1.032s] copying arob_lab_drones/drone_race.py -> /root/arob_ws/src/arob_lab_drones/build/arob_lab_drones/build/lib/arob_lab_drones
+[1.032s] running install
+[1.032s] running install_lib
+[1.033s] copying /root/arob_ws/src/arob_lab_drones/build/arob_lab_drones/build/lib/arob_lab_drones/drone_race.py -> /root/arob_ws/src/arob_lab_drones/install/arob_lab_drones/lib/python3.10/site-packages/arob_lab_drones
+[1.034s] byte-compiling /root/arob_ws/src/arob_lab_drones/install/arob_lab_drones/lib/python3.10/site-packages/arob_lab_drones/drone_race.py to drone_race.cpython-310.pyc
+[1.040s] running install_data
+[1.040s] running install_egg_info
+[1.042s] removing '/root/arob_ws/src/arob_lab_drones/install/arob_lab_drones/lib/python3.10/site-packages/arob_lab_drones-0.0.0-py3.10.egg-info' (and everything under it)
+[1.042s] Copying build/arob_lab_drones/arob_lab_drones.egg-info to /root/arob_ws/src/arob_lab_drones/install/arob_lab_drones/lib/python3.10/site-packages/arob_lab_drones-0.0.0-py3.10.egg-info
+[1.043s] running install_scripts
+[1.062s] Installing drone_race script to /root/arob_ws/src/arob_lab_drones/install/arob_lab_drones/lib/arob_lab_drones
+[1.063s] writing list of installed files to '/root/arob_ws/src/arob_lab_drones/build/arob_lab_drones/install.log'
+[1.084s] Invoked command in '/root/arob_ws/src/arob_lab_drones' returned '0': PYTHONPATH=/root/arob_ws/src/arob_lab_drones/build/arob_lab_drones/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/root/arob_ws/src/arob_lab_drones/install/arob_lab_drones/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base build/arob_lab_drones build --build-base /root/arob_ws/src/arob_lab_drones/build/arob_lab_drones/build install --record /root/arob_ws/src/arob_lab_drones/build/arob_lab_drones/install.log --single-version-externally-managed install_data
