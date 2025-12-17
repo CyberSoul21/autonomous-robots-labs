@@ -90,12 +90,12 @@ class DroneRaceNode(Node):
         self.mppi_lambda = 8.0#5.0#1.0         # temperature
         self.idx_progress = 0          # current progress along trajectory
         self.lookahead_steps = 5       # ~0.5s if dt=0.1, or ~0.25s if dt=0.05
+        
         # Control limits [vx, vy, vz, yaw_rate]
-        #self.u_min = np.array([-2.0, -2.0, -1.0, -2.0], dtype=float)
-        #self.u_max = np.array([ 2.0,  2.0,  1.0,  2.0], dtype=float)
-
-        self.u_min = np.array([-2.5, -2.5, -1.5, -2.0], dtype=float)  # Slightly more aggressive
-        self.u_max = np.array([ 2.5,  2.5,  1.5,  2.0], dtype=float)
+        self.u_min = np.array([-2.0, -2.0, -1.0, -2.0], dtype=float)
+        self.u_max = np.array([ 2.0,  2.0,  1.0,  2.0], dtype=float)
+        #self.u_min = np.array([-2.5, -2.5, -1.5, -2.0], dtype=float)  # Slightly more aggressive
+        #self.u_max = np.array([ 2.5,  2.5,  1.5,  2.0], dtype=float)
 
         # Exploration noise std
         #self.noise_std = np.array([0.6, 0.6, 0.4, 0.7], dtype=float) # best performance!!
