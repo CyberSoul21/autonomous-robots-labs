@@ -847,7 +847,7 @@ class DroneRaceNode(Node):
         self.pub_traj_markers.publish(marray)
     
     def position_timer_callback(self):
-        # self.get_logger().info('position timer callback')
+        self.get_logger().info('position timer callback')
 
         if self.current_pose is None:
             return
@@ -873,9 +873,9 @@ class DroneRaceNode(Node):
         x0 = self.get_state()
         if x0 is None:
             return
-        #t0 = time.perf_counter()
+        t0 = time.perf_counter()
         u0 = self.mppi_optimize(x0, t_ref)
-        #t1 = time.perf_counter()
+        t1 = time.perf_counter()
         #self.get_logger().info(f"MPPI compute time: {(t1-t0)*1000:.1f} ms")
         # Publish command
         msg = TwistStamped()
@@ -925,8 +925,8 @@ def main(args=None):
             #node.set_control_mode(yaw_mode=2, control_mode=3, reference_frame=2) # Velocity control #Original
             node.set_control_mode(yaw_mode=2, control_mode=3, reference_frame=2) # Velocity control
             sleep(2.0)
-            node.create_timer(0.05, node.velocity_timer_callback) # Original
-            node.create_timer(0.1, node.velocity_timer_callback)
+            #node.create_timer(0.05, node.velocity_timer_callback) # Original
+            node.create_timer(0.15, node.velocity_timer_callback)
         else:
             node.get_logger().info('Controlling drone in POSITION mode')
             node.set_control_mode(yaw_mode=1, control_mode=2, reference_frame=1) # Position control
