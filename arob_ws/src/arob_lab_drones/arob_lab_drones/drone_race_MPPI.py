@@ -104,18 +104,56 @@ class DroneRaceNode(Node):
     # MPPI 
     ################################################################################
 
-    #We compute the wrapped difference: This keeps yaw error “shortest way around the circle”. near the ±pi boundary
+    # We compute the wrapped difference: This keeps yaw error “shortest way around the circle”. near the ±pi boundary
     def wrap_pi(self, a):
         a = float(a)
         return (a + np.pi) % (2*np.pi) - np.pi
 
-    #We need yaw in the state, the simulator can predict yaw over the horizon.
-    #our reference may include yaw (face the next gate / face velocity direction)
+    # We need yaw in the state, the simulator can predict yaw over the horizon.
+    # our reference may include yaw (face the next gate / face velocity direction)
     def yaw_from_quat(self, q):
         # q type quternion
         quat = [q.x, q.y, q.z, q.w]
         _, _, yaw = tf_transformations.euler_from_quaternion(quat)
-        return float(yaw)        
+        return float(yaw)
+
+    # MPPI starts from current state
+    def get_state(self):
+        # Need pose + twist
+        if self.current_pose is None or self.current_twist is None:
+            return None
+
+        p = self.current_pose.pose.position
+        v = self.current_twist.twist.linear
+        yaw = self.yaw_from_quat(self.current_pose.pose.orientation)
+
+        x = np.array([p.x, p.y, p.z, v.x, v.y, v.z, yaw], dtype=float)
+        return x     
+    # Cost uses reference Position_ref(t), Velocity_ref(t), yaw_ref(t) along the horizon
+    def ref_at_time(self, t: float):
+        """
+        Returns reference position, velocity, yaw at time t (seconds since trajectory start).
+        """
+        # pick the reference point on your precomputed trajectory at time t:
+        # Clamp into trajectory time range
+        # Clamping guarantees: reference lookup always returns a valid point.
+        t = float(np.clip(t, float(self.traj_times[0]), float(self.traj_times[-1])))
+
+        # Nearest neighbor (simple, fast). You can upgrade to interpolation later.
+        # the sample whose timestamp is closest to the requested time t
+        idx = int(np.argmin(np.abs(self.traj_times - t))) # gives an array of differences to t, makes all differences positive, returns the index of the smallest difference
+
+        pref = self.traj_positions[idx].copy()
+        vref = self.traj_velocities[idx].copy()
+
+        # Yaw reference: face direction of velocity (if moving), else keep current yaw=0
+        speed = np.linalg.norm(vref)
+        if speed > 1e-3:
+            yaw_ref = math.atan2(vref[1], vref[0])
+        else:
+            yaw_ref = 0.0
+
+        return pref, vref, yaw_ref    
     ################################################################################
 
     def start_drone(self):
