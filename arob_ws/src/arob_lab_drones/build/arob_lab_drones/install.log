@@ -1,11 +1,11 @@
+/root/arob_ws/src/arob_lab_drones/install/arob_lab_drones/lib/python3.10/site-packages/arob_lab_drones/drone_race.py
 /root/arob_ws/src/arob_lab_drones/install/arob_lab_drones/lib/python3.10/site-packages/arob_lab_drones/drone_race_PID.py
 /root/arob_ws/src/arob_lab_drones/install/arob_lab_drones/lib/python3.10/site-packages/arob_lab_drones/trajectory_generator.py
 /root/arob_ws/src/arob_lab_drones/install/arob_lab_drones/lib/python3.10/site-packages/arob_lab_drones/__init__.py
-/root/arob_ws/src/arob_lab_drones/install/arob_lab_drones/lib/python3.10/site-packages/arob_lab_drones/drone_race_MPPI.py
+/root/arob_ws/src/arob_lab_drones/install/arob_lab_drones/lib/python3.10/site-packages/arob_lab_drones/__pycache__/drone_race.cpython-310.pyc
 /root/arob_ws/src/arob_lab_drones/install/arob_lab_drones/lib/python3.10/site-packages/arob_lab_drones/__pycache__/drone_race_PID.cpython-310.pyc
 /root/arob_ws/src/arob_lab_drones/install/arob_lab_drones/lib/python3.10/site-packages/arob_lab_drones/__pycache__/trajectory_generator.cpython-310.pyc
 /root/arob_ws/src/arob_lab_drones/install/arob_lab_drones/lib/python3.10/site-packages/arob_lab_drones/__pycache__/__init__.cpython-310.pyc
-/root/arob_ws/src/arob_lab_drones/install/arob_lab_drones/lib/python3.10/site-packages/arob_lab_drones/__pycache__/drone_race_MPPI.cpython-310.pyc
 /root/arob_ws/src/arob_lab_drones/install/arob_lab_drones/share/ament_index/resource_index/packages/arob_lab_drones
 /root/arob_ws/src/arob_lab_drones/install/arob_lab_drones/share/arob_lab_drones/package.xml
 /root/arob_ws/src/arob_lab_drones/install/arob_lab_drones/lib/python3.10/site-packages/arob_lab_drones-0.0.0-py3.10.egg-info/dependency_links.txt

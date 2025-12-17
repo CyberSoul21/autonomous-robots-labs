@@ -72,152 +72,7 @@ class DroneRaceNode(Node):
         
         self.id_marker = 0
         self.gates = []
-
-        ################################################################################
-        ##### MPPI params #####
-        self.mppi_dt = 0.05            # should match your timer period in velocity mode
-        self.mppi_T  = 25              # horizon steps (25*0.05=1.25s)
-        self.mppi_K  = 512             # rollouts
-        self.mppi_lambda = 1.0         # temperature
-
-        # Control limits [vx, vy, vz, yaw_rate]
-        self.u_min = np.array([-2.0, -2.0, -1.0, -2.0], dtype=float)
-        self.u_max = np.array([ 2.0,  2.0,  1.0,  2.0], dtype=float)
-
-        # Exploration noise std
-        self.noise_std = np.array([0.6, 0.6, 0.4, 0.7], dtype=float)
-
-        # Cost weights
-        self.w_pos = 12.0
-        self.w_vel = 1.5
-        self.w_yaw = 0.5
-        self.w_u   = 0.05
-        self.w_du  = 0.2
-
-        # Nominal control sequence U[t] = [vx, vy, vz, yaw_rate]
-        self.U = np.zeros((self.mppi_T, 4), dtype=float)
-
-        # For time alignment with your generated trajectory
-        self.t_start_wall = None  # set on first control tick
-        ################################################################################
-
-    # MPPI 
-    ################################################################################
-
-    # We compute the wrapped difference: This keeps yaw error “shortest way around the circle”. near the ±pi boundary
-    def wrap_pi(self, a):
-        a = float(a)
-        return (a + np.pi) % (2*np.pi) - np.pi
-
-    # We need yaw in the state, the simulator can predict yaw over the horizon.
-    # our reference may include yaw (face the next gate / face velocity direction)
-    def yaw_from_quat(self, q):
-        # q type quternion
-        quat = [q.x, q.y, q.z, q.w]
-        _, _, yaw = tf_transformations.euler_from_quaternion(quat)
-        return float(yaw)
-
-    # MPPI starts from current state
-    def get_state(self):
-        # Need pose + twist
-        if self.current_pose is None or self.current_twist is None:
-            return None
-
-        p = self.current_pose.pose.position
-        v = self.current_twist.twist.linear
-        yaw = self.yaw_from_quat(self.current_pose.pose.orientation)
-
-        x = np.array([p.x, p.y, p.z, v.x, v.y, v.z, yaw], dtype=float)
-        return x     
-    # Cost uses reference Position_ref(t), Velocity_ref(t), yaw_ref(t) along the horizon
-    def ref_at_time(self, t):
-        """
-        Returns reference position, velocity, yaw at time t (seconds since trajectory start).
-        """
-        # pick the reference point on your precomputed trajectory at time t:
-        # Clamp into trajectory time range
-        # Clamping guarantees: reference lookup always returns a valid point.
-        t = float(t)
-        t = float(np.clip(t, float(self.traj_times[0]), float(self.traj_times[-1])))
-
-        # Nearest neighbor (simple, fast). You can upgrade to interpolation later.
-        # the sample whose timestamp is closest to the requested time t
-        idx = int(np.argmin(np.abs(self.traj_times - t))) # gives an array of differences to t, makes all differences positive, returns the index of the smallest difference
-
-        pref = self.traj_positions[idx].copy()
-        vref = self.traj_velocities[idx].copy()
-
-        # Yaw reference: face direction of velocity (if moving), else keep current yaw=0
-        speed = np.linalg.norm(vref)
-        if speed > 1e-3:
-            yaw_ref = math.atan2(vref[1], vref[0])
-        else:
-            yaw_ref = 0.0
-
-        return pref, vref, yaw_ref   
-
-    # Dynamics model for rollouts
-    def dynamics_step(self, x: np.ndarray, u: np.ndarray) -> np.ndarray:
-        """
-        x = [px,py,pz,vx,vy,vz,yaw]
-        u = [vx_cmd, vy_cmd, vz_cmd, yaw_rate_cmd]
-        """
-        dt = self.mppi_dt
-        tau = 0.25  # velocity tracking aggressiveness
-
-        p = x[0:3]
-        v = x[3:6]
-        yaw = x[6]
-
-        v_cmd = u[0:3]
-        r_cmd = u[3]
-
-        v_next = v + (dt / tau) * (v_cmd - v)
-        p_next = p + dt * v_next
-        yaw_next = self.wrap_pi(yaw + dt * r_cmd)
-
-        x_next = x.copy()
-        x_next[0:3] = p_next
-        x_next[3:6] = v_next
-        x_next[6] = yaw_next
-        return x_next    
     
-    # Cost function
-    def rollout_cost(self, X: np.ndarray, U: np.ndarray, t0: float) -> float:
-        """
-        X shape: (T+1, 7), U shape: (T, 4)
-        t0: start time on the reference trajectory (seconds)
-        """
-        J = 0.0
-        prev_u = U[0]
-
-        for t in range(self.mppi_T):
-            pref, vref, yaw_ref = self.ref_at_time(t0 + t * self.mppi_dt)
-
-            p = X[t+1, 0:3]
-            v = X[t+1, 3:6]
-            yaw = X[t+1, 6]
-            u = U[t]
-
-            #This is the squared Euclidean distance to the reference.
-            pos_err = p - pref
-            vel_err = v - vref
-            yaw_err = self.wrap_pi(yaw - yaw_ref)
-
-            #This cost comes directly from optimal control theory.
-            # This is standard MPC / LQR / MPPI theory:
-            J += self.w_pos * float(pos_err @ pos_err)
-            J += self.w_vel * float(vel_err @ vel_err)
-            J += self.w_yaw * float(yaw_err * yaw_err)
-
-            J += self.w_u * float(u @ u)
-            du = u - prev_u
-            J += self.w_du * float(du @ du)
-            prev_u = u
-
-        return J
-    ################################################################################
-
     def start_drone(self):
         print('Initializing Aerostack Drone')
         # Drone interface
@@ -705,6 +560,70 @@ class DroneRaceNode(Node):
     
     def position_timer_callback(self):
         # self.get_logger().info('position timer callback')
+        now = self.get_clock().now()    
+
+        if len(self.traj_positions) -1 >= self.goal_idx:
+
+            desired_pose = self.traj_positions[self.goal_idx]
+            desired_twist = self.traj_velocities[self.goal_idx]
+
+            current_pose = np.array([
+                self.current_pose.pose.position.x,
+                self.current_pose.pose.position.y,
+                self.current_pose.pose.position.z
+            ])
+            current_twist = np.array([
+                self.current_twist.twist.linear.x,
+                self.current_twist.twist.linear.y,
+                self.current_twist.twist.linear.z
+            ])
+
+            if not hasattr(self,'prev_time'):
+                self.prev_time = now
+                self.start_time = time.time()
+
+            # PID control (produces velocity command)
+            kp = 0.75 
+            kd = kp * 4 
+            ki = kp / 15
+            dt = (now - self.prev_time).nanoseconds * 1e-9
+            self.prev_time = now
+
+            pose_error = desired_pose - current_pose
+            twist_error = desired_twist - current_twist  # for derivative term
+            
+            # integral term
+            self.pos_integral += pose_error * dt
+            self.pos_integral = np.clip(self.pos_integral,-0.75,0.75) #Clipping it between +- 0.75m/s, drone doesn't pass 1m/s
+
+            v_cmd = kp * pose_error + ki * self.pos_integral + kd * twist_error
+            # Integrate to get next position command
+            self.pos_cmd += v_cmd * dt
+
+            # Publish PoseStamped
+            pose_change = PoseStamped()
+            pose_change.header.stamp = self.get_clock().now().to_msg()
+            pose_change.header.frame_id = 'earth'
+            pose_change.pose.position.x = self.pos_cmd[0]
+            pose_change.pose.position.y = self.pos_cmd[1]
+            pose_change.pose.position.z = self.pos_cmd[2]
+
+           
+            self.pose_command_publisher.publish(pose_change)
+            self.goal_idx += 1
+
+        else:
+            self.end_time = time.time()
+
+            pose_change = PoseStamped()
+            pose_change.header.stamp = self.get_clock().now().to_msg()
+            pose_change.header.frame_id = 'earth'
+            pose_change.pose.position.x = 0.0
+            pose_change.pose.position.y = 0.0
+            pose_change.pose.position.z = 1.0
+            
+            self.pose_command_publisher.publish(pose_change)
+
 
         if self.current_pose is None:
             return
@@ -712,9 +631,79 @@ class DroneRaceNode(Node):
     
     def velocity_timer_callback(self):
         # self.get_logger().info('velocity timer callback')
+
+        # On first call, set start time
+        if not hasattr(self, 'trajectory_start_time'):
+            self.trajectory_start_time = self.get_clock().now()
+
+        # Compute elapsed time
+        now = self.get_clock().now()
+        elapsed = (now - self.trajectory_start_time).nanoseconds * 1e-9
+
+        # Find index for current time
+        self.goal_idx = np.searchsorted(self.traj_times, elapsed, side='right') - 1
+        self.goal_idx = max(0, min(self.goal_idx, len(self.traj_velocities) - 1))
+
+
+        if (len(self.traj_velocities) -1 >= self.goal_idx) and (elapsed < self.traj_times[-1]):
+            traj_pos = self.traj_positions[self.goal_idx]
+            traj_velocity = self.traj_velocities[self.goal_idx]
+            traj_accel = self.traj_accelerations[self.goal_idx]
+
+            # Compute error on position and velocity
+            kp = 1 
+            kv = 2
+            ka = 0.5
+            current_pos = np.array([
+                self.current_pose.pose.position.x,
+                self.current_pose.pose.position.y,
+                self.current_pose.pose.position.z
+            ])
+            current_twist = np.array([
+                self.current_twist.twist.linear.x,
+                self.current_twist.twist.linear.y,
+                self.current_twist.twist.linear.z
+            ])
+
+            if not hasattr(self,'prev_time'):
+                self.prev_time = now
+                self.prev_twist = current_twist
+                estimated_accel = np.array([0.0,0.0,0.0])
+
+            else:
+                dt = (now - self.prev_time).nanoseconds * 1e-9
+                self.prev_time = now
+                estimated_accel = (current_twist - self.prev_twist) / dt
+                self.prev_twist = current_twist
+
+
+            pose_error = traj_pos - current_pos
+            twist_error = traj_velocity - current_twist
+            accel_error = traj_accel - estimated_accel
+
+            final_vel = traj_velocity + kp * pose_error + kv * twist_error + ka * accel_error
+
+
+            velocity_change = TwistStamped()
+            velocity_change.header.stamp = now.to_msg()
+            velocity_change.header.frame_id = 'earth'
+            velocity_change.twist.linear.x = final_vel[0]
+            velocity_change.twist.linear.y = final_vel[1]
+            velocity_change.twist.linear.z = final_vel[2]
+            self.vel_command_publisher.publish(velocity_change)
+    
+        else:
+            velocity_change = TwistStamped()
+            velocity_change.header.stamp = now.to_msg()
+            velocity_change.header.frame_id = 'earth'
+            velocity_change.twist.linear.x = 0.0
+            velocity_change.twist.linear.y = 0.0
+            velocity_change.twist.linear.z = 0.0
+            self.vel_command_publisher.publish(velocity_change)
+
         if self.current_pose is None:
             return
-    # Complete this function to publish velocity commands to follow the trajectory    
+        # Complete this function to publish velocity commands to follow the trajectory    
 
 
 def main(args=None):

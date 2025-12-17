@@ -2,7 +2,7 @@ package.xml
 setup.cfg
 setup.py
 arob_lab_drones/__init__.py
-arob_lab_drones/drone_race_MPPI.py
+arob_lab_drones/drone_race.py
 arob_lab_drones/drone_race_PID.py
 arob_lab_drones/trajectory_generator.py
 build/arob_lab_drones/arob_lab_drones.egg-info/PKG-INFO
