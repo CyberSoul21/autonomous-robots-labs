@@ -560,70 +560,6 @@ class DroneRaceNode(Node):
     
     def position_timer_callback(self):
         # self.get_logger().info('position timer callback')
-        now = self.get_clock().now()    
-
-        if len(self.traj_positions) -1 >= self.goal_idx:
-
-            desired_pose = self.traj_positions[self.goal_idx]
-            desired_twist = self.traj_velocities[self.goal_idx]
-
-            current_pose = np.array([
-                self.current_pose.pose.position.x,
-                self.current_pose.pose.position.y,
-                self.current_pose.pose.position.z
-            ])
-            current_twist = np.array([
-                self.current_twist.twist.linear.x,
-                self.current_twist.twist.linear.y,
-                self.current_twist.twist.linear.z
-            ])
-
-            if not hasattr(self,'prev_time'):
-                self.prev_time = now
-                self.start_time = time.time()
-
-            # PID control (produces velocity command)
-            kp = 0.75 
-            kd = kp * 4 
-            ki = kp / 15
-            dt = (now - self.prev_time).nanoseconds * 1e-9
-            self.prev_time = now
-
-            pose_error = desired_pose - current_pose
-            twist_error = desired_twist - current_twist  # for derivative term
-            
-            # integral term
-            self.pos_integral += pose_error * dt
-            self.pos_integral = np.clip(self.pos_integral,-0.75,0.75) #Clipping it between +- 0.75m/s, drone doesn't pass 1m/s
-
-            v_cmd = kp * pose_error + ki * self.pos_integral + kd * twist_error
-            # Integrate to get next position command
-            self.pos_cmd += v_cmd * dt
-
-            # Publish PoseStamped
-            pose_change = PoseStamped()
-            pose_change.header.stamp = self.get_clock().now().to_msg()
-            pose_change.header.frame_id = 'earth'
-            pose_change.pose.position.x = self.pos_cmd[0]
-            pose_change.pose.position.y = self.pos_cmd[1]
-            pose_change.pose.position.z = self.pos_cmd[2]
-
-           
-            self.pose_command_publisher.publish(pose_change)
-            self.goal_idx += 1
-
-        else:
-            self.end_time = time.time()
-
-            pose_change = PoseStamped()
-            pose_change.header.stamp = self.get_clock().now().to_msg()
-            pose_change.header.frame_id = 'earth'
-            pose_change.pose.position.x = 0.0
-            pose_change.pose.position.y = 0.0
-            pose_change.pose.position.z = 1.0
-            
-            self.pose_command_publisher.publish(pose_change)
-
 
         if self.current_pose is None:
             return
@@ -631,79 +567,9 @@ class DroneRaceNode(Node):
     
     def velocity_timer_callback(self):
         # self.get_logger().info('velocity timer callback')
-
-        # On first call, set start time
-        if not hasattr(self, 'trajectory_start_time'):
-            self.trajectory_start_time = self.get_clock().now()
-
-        # Compute elapsed time
-        now = self.get_clock().now()
-        elapsed = (now - self.trajectory_start_time).nanoseconds * 1e-9
-
-        # Find index for current time
-        self.goal_idx = np.searchsorted(self.traj_times, elapsed, side='right') - 1
-        self.goal_idx = max(0, min(self.goal_idx, len(self.traj_velocities) - 1))
-
-
-        if (len(self.traj_velocities) -1 >= self.goal_idx) and (elapsed < self.traj_times[-1]):
-            traj_pos = self.traj_positions[self.goal_idx]
-            traj_velocity = self.traj_velocities[self.goal_idx]
-            traj_accel = self.traj_accelerations[self.goal_idx]
-
-            # Compute error on position and velocity
-            kp = 1 
-            kv = 2
-            ka = 0.5
-            current_pos = np.array([
-                self.current_pose.pose.position.x,
-                self.current_pose.pose.position.y,
-                self.current_pose.pose.position.z
-            ])
-            current_twist = np.array([
-                self.current_twist.twist.linear.x,
-                self.current_twist.twist.linear.y,
-                self.current_twist.twist.linear.z
-            ])
-
-            if not hasattr(self,'prev_time'):
-                self.prev_time = now
-                self.prev_twist = current_twist
-                estimated_accel = np.array([0.0,0.0,0.0])
-
-            else:
-                dt = (now - self.prev_time).nanoseconds * 1e-9
-                self.prev_time = now
-                estimated_accel = (current_twist - self.prev_twist) / dt
-                self.prev_twist = current_twist
-
-
-            pose_error = traj_pos - current_pos
-            twist_error = traj_velocity - current_twist
-            accel_error = traj_accel - estimated_accel
-
-            final_vel = traj_velocity + kp * pose_error + kv * twist_error + ka * accel_error
-
-
-            velocity_change = TwistStamped()
-            velocity_change.header.stamp = now.to_msg()
-            velocity_change.header.frame_id = 'earth'
-            velocity_change.twist.linear.x = final_vel[0]
-            velocity_change.twist.linear.y = final_vel[1]
-            velocity_change.twist.linear.z = final_vel[2]
-            self.vel_command_publisher.publish(velocity_change)
-    
-        else:
-            velocity_change = TwistStamped()
-            velocity_change.header.stamp = now.to_msg()
-            velocity_change.header.frame_id = 'earth'
-            velocity_change.twist.linear.x = 0.0
-            velocity_change.twist.linear.y = 0.0
-            velocity_change.twist.linear.z = 0.0
-            self.vel_command_publisher.publish(velocity_change)
-
         if self.current_pose is None:
             return
-        # Complete this function to publish velocity commands to follow the trajectory    
+    # Complete this function to publish velocity commands to follow the trajectory    
 
 
 def main(args=None):

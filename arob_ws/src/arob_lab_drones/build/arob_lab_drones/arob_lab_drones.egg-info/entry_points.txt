@@ -1,0 +1,3 @@
+[console_scripts]
+drone_race = arob_lab_drones.drone_race:main
+

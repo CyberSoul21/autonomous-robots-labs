@@ -1,0 +1,41 @@
+running egg_info
+creating build/arob_lab_drones/arob_lab_drones.egg-info
+writing build/arob_lab_drones/arob_lab_drones.egg-info/PKG-INFO
+writing dependency_links to build/arob_lab_drones/arob_lab_drones.egg-info/dependency_links.txt
+writing entry points to build/arob_lab_drones/arob_lab_drones.egg-info/entry_points.txt
+writing requirements to build/arob_lab_drones/arob_lab_drones.egg-info/requires.txt
+writing top-level names to build/arob_lab_drones/arob_lab_drones.egg-info/top_level.txt
+writing manifest file 'build/arob_lab_drones/arob_lab_drones.egg-info/SOURCES.txt'
+reading manifest file 'build/arob_lab_drones/arob_lab_drones.egg-info/SOURCES.txt'
+writing manifest file 'build/arob_lab_drones/arob_lab_drones.egg-info/SOURCES.txt'
+running build
+running build_py
+creating /root/arob_ws/src/arob_lab_drones/build/arob_lab_drones/build
+creating /root/arob_ws/src/arob_lab_drones/build/arob_lab_drones/build/lib
+creating /root/arob_ws/src/arob_lab_drones/build/arob_lab_drones/build/lib/arob_lab_drones
+copying arob_lab_drones/drone_race_PID.py -> /root/arob_ws/src/arob_lab_drones/build/arob_lab_drones/build/lib/arob_lab_drones
+copying arob_lab_drones/trajectory_generator.py -> /root/arob_ws/src/arob_lab_drones/build/arob_lab_drones/build/lib/arob_lab_drones
+copying arob_lab_drones/__init__.py -> /root/arob_ws/src/arob_lab_drones/build/arob_lab_drones/build/lib/arob_lab_drones
+copying arob_lab_drones/drone_race_MPPI.py -> /root/arob_ws/src/arob_lab_drones/build/arob_lab_drones/build/lib/arob_lab_drones
+running install
+running install_lib
+creating /root/arob_ws/src/arob_lab_drones/install/arob_lab_drones/lib/python3.10/site-packages/arob_lab_drones
+copying /root/arob_ws/src/arob_lab_drones/build/arob_lab_drones/build/lib/arob_lab_drones/drone_race_PID.py -> /root/arob_ws/src/arob_lab_drones/install/arob_lab_drones/lib/python3.10/site-packages/arob_lab_drones
+copying /root/arob_ws/src/arob_lab_drones/build/arob_lab_drones/build/lib/arob_lab_drones/trajectory_generator.py -> /root/arob_ws/src/arob_lab_drones/install/arob_lab_drones/lib/python3.10/site-packages/arob_lab_drones
+copying /root/arob_ws/src/arob_lab_drones/build/arob_lab_drones/build/lib/arob_lab_drones/__init__.py -> /root/arob_ws/src/arob_lab_drones/install/arob_lab_drones/lib/python3.10/site-packages/arob_lab_drones
+copying /root/arob_ws/src/arob_lab_drones/build/arob_lab_drones/build/lib/arob_lab_drones/drone_race_MPPI.py -> /root/arob_ws/src/arob_lab_drones/install/arob_lab_drones/lib/python3.10/site-packages/arob_lab_drones
+byte-compiling /root/arob_ws/src/arob_lab_drones/install/arob_lab_drones/lib/python3.10/site-packages/arob_lab_drones/drone_race_PID.py to drone_race_PID.cpython-310.pyc
+byte-compiling /root/arob_ws/src/arob_lab_drones/install/arob_lab_drones/lib/python3.10/site-packages/arob_lab_drones/trajectory_generator.py to trajectory_generator.cpython-310.pyc
+byte-compiling /root/arob_ws/src/arob_lab_drones/install/arob_lab_drones/lib/python3.10/site-packages/arob_lab_drones/__init__.py to __init__.cpython-310.pyc
+byte-compiling /root/arob_ws/src/arob_lab_drones/install/arob_lab_drones/lib/python3.10/site-packages/arob_lab_drones/drone_race_MPPI.py to drone_race_MPPI.cpython-310.pyc
+running install_data
+creating /root/arob_ws/src/arob_lab_drones/install/arob_lab_drones/share/ament_index
+creating /root/arob_ws/src/arob_lab_drones/install/arob_lab_drones/share/ament_index/resource_index
+creating /root/arob_ws/src/arob_lab_drones/install/arob_lab_drones/share/ament_index/resource_index/packages
+copying resource/arob_lab_drones -> /root/arob_ws/src/arob_lab_drones/install/arob_lab_drones/share/ament_index/resource_index/packages
+copying package.xml -> /root/arob_ws/src/arob_lab_drones/install/arob_lab_drones/share/arob_lab_drones
+running install_egg_info
+Copying build/arob_lab_drones/arob_lab_drones.egg-info to /root/arob_ws/src/arob_lab_drones/install/arob_lab_drones/lib/python3.10/site-packages/arob_lab_drones-0.0.0-py3.10.egg-info
+running install_scripts
+Installing drone_race script to /root/arob_ws/src/arob_lab_drones/install/arob_lab_drones/lib/arob_lab_drones
+writing list of installed files to '/root/arob_ws/src/arob_lab_drones/build/arob_lab_drones/install.log'
