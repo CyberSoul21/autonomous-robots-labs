@@ -88,8 +88,6 @@ class DroneRaceNode(Node):
         self.mppi_T  = 10#25              # horizon steps (25*0.05=1.25s)
         self.mppi_K  = 64 #512             # rollouts
         self.mppi_lambda = 8.0#5.0#1.0         # temperature
-        self.idx_progress = 0          # current progress along trajectory
-        self.lookahead_steps = 5       # ~0.5s if dt=0.1, or ~0.25s if dt=0.05
         
         # Control limits [vx, vy, vz, yaw_rate]
         self.u_min = np.array([-2.0, -2.0, -1.0, -2.0], dtype=float)
@@ -283,28 +281,7 @@ class DroneRaceNode(Node):
         self._Jstd  = float(np.std(costs))
         self._ESS   = float(1.0 / (np.sum(w * w) + 1e-12))
 
-        return u0
-    
-    #Always track the point on the trajectory that is closest to my current position (or slightly ahead).
-    def compute_progress_index(self, p_now):
-        """
-        Returns a trajectory index close to the drone's current position,
-        but never goes backwards (monotonic progress).
-        """
-        # Search only forward from current progress (fast + prevents jumping back)
-        window = 200  # how far ahead to search (tune if needed)
-        i0 = self.idx_progress
-        i1 = min(len(self.traj_times) - 1, i0 + window)
-
-        positions = self.traj_positions[i0:i1+1]         # (M,3)
-        d = np.linalg.norm(positions - p_now[None, :], axis=1)  # distances
-        j = int(np.argmin(d))                             # local index in window
-        idx_closest = i0 + j
-
-        # Never go backwards
-        self.idx_progress = max(self.idx_progress, idx_closest)
-
-        return self.idx_progress    
+        return u0   
     ################################################################################
 
     def start_drone(self):
@@ -560,7 +537,7 @@ class DroneRaceNode(Node):
         self.trajectory = traj_gen
 
         # Store the trajectory in class variables
-        deltat = 0.1#0.05
+        deltat = self.mppi_dt#0.05
         t0 = float(self.trajectory.times[0])
         tf = float(self.trajectory.times[-1])
         n_steps = int(np.floor((tf - t0) / deltat)) + 1
@@ -633,7 +610,7 @@ class DroneRaceNode(Node):
         self.trajectory = traj_gen
 
         # Store the trajectory in class variables
-        deltat = 0.05
+        deltat = self.mppi_dt#0.05
         t0 = float(self.trajectory.times[0])
         tf = float(self.trajectory.times[-1])
         n_steps = int(np.floor((tf - t0) / deltat)) + 1
@@ -686,7 +663,7 @@ class DroneRaceNode(Node):
         self.trajectory = traj_gen
         
         # Store trajectory
-        deltat = 0.05
+        deltat = self.mppi_dt#0.05
         t0 = float(self.trajectory.times[0])
         tf = float(self.trajectory.times[-1])
 
@@ -875,13 +852,7 @@ class DroneRaceNode(Node):
 
         x0 = self.get_state()
         # Time along the reference trajectory
-        t_ref = now - self.t_start_wall
-        # #progress-based tracking
-        # p_now = x0[0:3]
-        # idx_closest = self.compute_progress_index(p_now)
-        # # Look ahead so we don't try to go exactly to the closest point (helps smooth following)
-        # idx_target = min(idx_closest + self.lookahead_steps, len(self.traj_times) - 1)
-        # t_ref = float(self.traj_times[idx_target])        
+        t_ref = now - self.t_start_wall      
 
 
         # Reference at current time (for logging errors)
@@ -992,7 +963,8 @@ def main(args=None):
             node.get_logger().info('Controlling drone in POSITION mode')
             node.set_control_mode(yaw_mode=1, control_mode=2, reference_frame=1) # Position control
             sleep(2.0)
-            node.create_timer(0.05, node.position_timer_callback)
+            #node.create_timer(0.05, node.position_timer_callback)
+            node.create_timer(0.1, node.position_timer_callback)
     else:
         print("Running in --no-drone mode: skipping Aerostack drone interface.")
         
