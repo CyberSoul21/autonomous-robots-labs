@@ -139,7 +139,7 @@ class DroneRaceNode(Node):
 
         # ===== ADD LOGGING SETUP =====
         # Create logs directory if it doesn't exist
-        log_dir = os.path.expanduser('~/mppi_logs')
+        log_dir = os.path.expanduser('/tmp/mppi_logs')
         os.makedirs(log_dir, exist_ok=True)
 
         timestamp = int(time.time())
@@ -147,10 +147,6 @@ class DroneRaceNode(Node):
 
         self.log_file = open(log_filename, 'w', newline='')
         self.log_writer = csv.writer(self.log_file)          
-
-        #timestamp = int(time.time())
-        #self.log_file = open(f'mppi_log_{timestamp}.csv', 'w', newline='')
-        #self.log_writer = csv.writer(self.log_file)
         self.log_writer.writerow([
             'time', 
             'pos_x', 'pos_y', 'pos_z',
