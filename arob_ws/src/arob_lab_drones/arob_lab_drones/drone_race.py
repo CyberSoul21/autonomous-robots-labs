@@ -85,27 +85,42 @@ class DroneRaceNode(Node):
         ################################################################################
         ##### MPPI params #####
         self.mppi_dt = 0.1#0.05            # should match your timer period in velocity mode
-        self.mppi_T  = 10#25              # horizon steps (25*0.05=1.25s)
-        self.mppi_K  = 64 #512             # rollouts
-        self.mppi_lambda = 8.0#5.0#1.0         # temperature
+        self.mppi_T  = 10              # horizon steps (25*0.05=1.25s)
+        self.mppi_K  = 64              # rollouts
+        self.mppi_lambda = 8.0         # temperature
         
         # Control limits [vx, vy, vz, yaw_rate]
-        self.u_min = np.array([-2.0, -2.0, -1.0, -2.0], dtype=float)
-        self.u_max = np.array([ 2.0,  2.0,  1.0,  2.0], dtype=float)
-        #self.u_min = np.array([-2.5, -2.5, -1.5, -2.0], dtype=float)  # Slightly more aggressive
-        #self.u_max = np.array([ 2.5,  2.5,  1.5,  2.0], dtype=float)
+        #self.u_min = np.array([-2.0, -2.0, -1.0, -2.0], dtype=float)
+        #self.u_max = np.array([ 2.0,  2.0,  1.0,  2.0], dtype=float)
+        self.u_min = np.array([-2.5, -2.5, -1.5, -2.0], dtype=float)  # Slightly more aggressive
+        self.u_max = np.array([ 2.5,  2.5,  1.5,  2.0], dtype=float)
 
         # Exploration noise std
         #self.noise_std = np.array([0.6, 0.6, 0.4, 0.7], dtype=float) # best performance!!
         # Increased exploration
-        self.noise_std = np.array([0.4, 0.4, 0.25, 0.4], dtype=float) # best performance!!
+        #self.noise_std = np.array([0.4, 0.4, 0.25, 0.4], dtype=float) # best performance!!
+        self.noise_std = np.array([0.6, 0.6, 0.4, 0.6], dtype=float)  # Increase from [0.4, 0.4, 0.25, 0.4]
 
-        # Cost weights
-        self.w_pos = 25.0
-        self.w_vel = 3.0
-        self.w_yaw = 0.1#0.5
-        self.w_u   = 0.01#0.05
-        self.w_du  = 0.05#0.2
+        # # Cost weights
+        # self.w_pos = 25.0
+        # self.w_vel = 3.0
+        # self.w_yaw = 0.1#0.5
+        # self.w_u   = 0.01#0.05
+        # self.w_du  = 0.05#0.2
+
+        # Adjusted for 0.1s control period
+        # self.w_pos = 8.0   # Lower (was 15→25)
+        # self.w_vel = 4.0   # Moderate velocity tracking
+        # self.w_yaw = 3.5#1.0   # Keep yaw tracking
+        # self.w_u   = 0.03  # Slightly higher control penalty
+        # self.w_du  = 0.25  # Much higher smoothness (critical at 0.1s!)
+
+        # Cost weights - CRITICAL REBALANCE
+        self.w_pos = 3.0#5.0   # Reduce from 8.0 (too aggressive!)
+        self.w_vel = 4.0#6.0   # Increase from 4.0 (better tracking)
+        self.w_yaw = 3.5#4.0   # Increase from 3.5 (still some yaw errors)
+        self.w_u   = 0.02  # Reduce from 0.03 (allow more control)
+        self.w_du  = 0.35  # Increase from 0.25 (smoother commands)
 
         # Nominal control sequence U[t] = [vx, vy, vz, yaw_rate]
         self.U = np.zeros((self.mppi_T, 4), dtype=float)
@@ -896,18 +911,18 @@ class DroneRaceNode(Node):
         ]
 
         # --- MPPI stats (store these in mppi_optimize) ---
-        # self._Jmin, self._Jmean, self._Jstd, self._ESS
+        self._Jmin, self._Jmean, self._Jstd, self._ESS
 
-        # self._tick_i += 1
-        # if self._tick_i % self._log_every == 0:
-        #     self.get_logger().info(
-        #         f"dt_wall={dt_wall*1000:5.1f}ms  mppi={((t1-t0)*1000):5.1f}ms  "
-        #         f"e_p={pos_err:4.2f}  e_v={vel_err:4.2f}  e_yaw={yaw_err:4.2f}  "
-        #         f"u=[{u0[0]:+.2f},{u0[1]:+.2f},{u0[2]:+.2f},{u0[3]:+.2f}]  "
-        #         f"du={du:4.2f}  sat={sat}  "
-        #         f"J(min/mean/std)={self._Jmin:.1f}/{self._Jmean:.1f}/{self._Jstd:.1f}  "
-        #         f"ESS={self._ESS:.1f}/{self.mppi_K}"
-        #     )   
+        self._tick_i += 1
+        if self._tick_i % self._log_every == 0:
+            self.get_logger().info(
+                f"dt_wall={dt_wall*1000:5.1f}ms  mppi={((t1-t0)*1000):5.1f}ms  "
+                f"e_p={pos_err:4.2f}  e_v={vel_err:4.2f}  e_yaw={yaw_err:4.2f}  "
+                f"u=[{u0[0]:+.2f},{u0[1]:+.2f},{u0[2]:+.2f},{u0[3]:+.2f}]  "
+                f"du={du:4.2f}  sat={sat}  "
+                f"J(min/mean/std)={self._Jmin:.1f}/{self._Jmean:.1f}/{self._Jstd:.1f}  "
+                f"ESS={self._ESS:.1f}/{self.mppi_K}"
+            )   
 
         # Publish command
         msg = TwistStamped()
