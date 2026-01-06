@@ -19,7 +19,7 @@ from arob_lab_drones.trajectory_generator import TrajectoryGenerator  # adjust p
 import argparse
 from types import SimpleNamespace
 import time
-
+import csv
 
 
 class DroneRaceNode(Node):
@@ -72,7 +72,40 @@ class DroneRaceNode(Node):
         
         self.id_marker = 0
         self.gates = []
-    
+
+        # ===== ADD LOGGING SETUP (after all other initializations) =====
+        log_dir = os.path.expanduser('/tmp/PID_logs')
+        os.makedirs(log_dir, exist_ok=True)
+        
+        timestamp = int(time.time())
+        log_filename = os.path.join(log_dir, f'pid_log_{timestamp}.csv')
+        
+        self.log_file = open(log_filename, 'w', newline='')
+        self.log_writer = csv.writer(self.log_file)
+        self.log_writer.writerow([
+            'time',
+            'pos_x', 'pos_y', 'pos_z',
+            'vel_x', 'vel_y', 'vel_z',
+            'ref_px', 'ref_py', 'ref_pz',
+            'ref_vx', 'ref_vy', 'ref_vz',
+            'cmd_vx', 'cmd_vy', 'cmd_vz',  # For velocity mode
+            'cmd_px', 'cmd_py', 'cmd_pz',  # For position mode
+            'err_pos', 'err_vel',
+            'integral_x', 'integral_y', 'integral_z',
+            'control_mode'  # 'position' or 'velocity'
+        ])
+        
+        self.get_logger().info(f'Logging to: {log_filename}')
+        self.control_mode_str = 'unknown'  # Track which mode we're in
+        # ===== END LOGGING SETUP =====   
+
+
+    def __del__(self):
+        """Clean up - close log file"""
+        if hasattr(self, 'log_file'):
+            self.log_file.close()
+            self.get_logger().info('Log file closed')    
+
     def start_drone(self):
         print('Initializing Aerostack Drone')
         # Drone interface
@@ -90,7 +123,7 @@ class DroneRaceNode(Node):
         print("Take Off")
         self.uav.takeoff(height=1.0, speed=1.0)
         sleep(1.0)
-        print('Drone ready to fly')
+        print('Drone ready to fly - PID')
 
         # Create control mode client
         self.set_control_mode_client = self.create_client(SetControlMode, '/drone0/controller/set_control_mode')
@@ -635,6 +668,7 @@ class DroneRaceNode(Node):
         # On first call, set start time
         if not hasattr(self, 'trajectory_start_time'):
             self.trajectory_start_time = self.get_clock().now()
+            self.vel_start_time = time.time()
 
         # Compute elapsed time
         now = self.get_clock().now()
@@ -682,6 +716,29 @@ class DroneRaceNode(Node):
             accel_error = traj_accel - estimated_accel
 
             final_vel = traj_velocity + kp * pose_error + kv * twist_error + ka * accel_error
+
+            # ===== ADD LOGGING =====
+            log_elapsed = time.time() - self.vel_start_time
+            err_pos = float(np.linalg.norm(pose_error))
+            err_vel = float(np.linalg.norm(twist_error))
+            
+            self.log_writer.writerow([
+                log_elapsed,
+                current_pos[0], current_pos[1], current_pos[2],
+                current_twist[0], current_twist[1], current_twist[2],
+                traj_pos[0], traj_pos[1], traj_pos[2],
+                traj_velocity[0], traj_velocity[1], traj_velocity[2],
+                final_vel[0], final_vel[1], final_vel[2],  # velocity command
+                0.0, 0.0, 0.0,  # no position command in velocity mode
+                err_pos, err_vel,
+                0.0, 0.0, 0.0,  # no integral in velocity mode
+                'velocity'
+            ])
+            
+            # Flush every 50 iterations
+            if self.goal_idx % 50 == 0:
+                self.log_file.flush()
+            # ===== END LOGGING =====            
 
 
             velocity_change = TwistStamped()
