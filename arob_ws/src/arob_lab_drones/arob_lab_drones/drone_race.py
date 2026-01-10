@@ -897,90 +897,98 @@ class DroneRaceNode(Node):
         # Time along the reference trajectory
         t_ref = now - self.t_start_wall      
 
+        if ( t_ref < self.traj_times[-1]):
+            # Reference at current time (for logging errors)
+            pref, vref, yaw_ref = self.ref_at_time(t_ref)
 
-        # Reference at current time (for logging errors)
-        pref, vref, yaw_ref = self.ref_at_time(t_ref)
-
-        
-        if x0 is None:
-            return
-        t0 = time.perf_counter()
-        u0 = self.mppi_optimize(x0, t_ref)
-        t1 = time.perf_counter()
-        #self.get_logger().info(f"MPPI compute time: {(t1-t0)*1000:.1f} ms")
+            
+            if x0 is None:
+                return
+            t0 = time.perf_counter()
+            u0 = self.mppi_optimize(x0, t_ref)
+            t1 = time.perf_counter()
+            #self.get_logger().info(f"MPPI compute time: {(t1-t0)*1000:.1f} ms")
 
 
 
-        # --- tick timing ---
-        wall_now = time.perf_counter()
-        if self._last_tick_wall is None:
-            dt_wall = float('nan')
+            # --- tick timing ---
+            wall_now = time.perf_counter()
+            if self._last_tick_wall is None:
+                dt_wall = float('nan')
+            else:
+                dt_wall = wall_now - self._last_tick_wall
+            self._last_tick_wall = wall_now
+
+            # --- tracking errors ---
+            p = x0[0:3]
+            v = x0[3:6]
+            yaw = x0[6]
+            pos_err = float(np.linalg.norm(p - pref))
+            vel_err = float(np.linalg.norm(v - vref))
+            yaw_err = float(self.wrap_pi(yaw - yaw_ref))
+
+            # --- command diagnostics ---
+            du = float(np.linalg.norm(u0 - self._u_prev))
+            self._u_prev = u0.copy()
+
+            sat = [
+                abs(u0[0]) >= 0.95 * self.u_max[0],
+                abs(u0[1]) >= 0.95 * self.u_max[1],
+                abs(u0[2]) >= 0.95 * self.u_max[2],
+                abs(u0[3]) >= 0.95 * self.u_max[3],
+            ]
+
+            # ===== ADD LOGGING =====
+            self.log_writer.writerow([
+                t_ref,
+                p[0], p[1], p[2],
+                v[0], v[1], v[2],
+                yaw,
+                u0[0], u0[1], u0[2], u0[3],
+                pref[0], pref[1], pref[2],
+                vref[0], vref[1], vref[2],
+                yaw_ref,
+                pos_err, vel_err, yaw_err,
+                self._Jmin, self._Jmean, self._Jstd, self._ESS,
+                du, int(sat[0]), int(sat[1]), int(sat[2]), int(sat[3])
+            ])
+            
+            # Flush every 50 ticks (~5 seconds at 0.1s rate)
+            if self._tick_i % 50 == 0:
+                self.log_file.flush()
+            # ===== END LOGGING =====        
+
+            # --- MPPI stats (store these in mppi_optimize) ---
+            # self._Jmin, self._Jmean, self._Jstd, self._ESS
+
+            # self._tick_i += 1
+            # if self._tick_i % self._log_every == 0:
+            #     self.get_logger().info(
+            #         f"dt_wall={dt_wall*1000:5.1f}ms  mppi={((t1-t0)*1000):5.1f}ms  "
+            #         f"e_p={pos_err:4.2f}  e_v={vel_err:4.2f}  e_yaw={yaw_err:4.2f}  "
+            #         f"u=[{u0[0]:+.2f},{u0[1]:+.2f},{u0[2]:+.2f},{u0[3]:+.2f}]  "
+            #         f"du={du:4.2f}  sat={sat}  "
+            #         f"J(min/mean/std)={self._Jmin:.1f}/{self._Jmean:.1f}/{self._Jstd:.1f}  "
+            #         f"ESS={self._ESS:.1f}/{self.mppi_K}"
+            #     )   
+
+            # Publish command
+            msg = TwistStamped()
+            msg.header.stamp = self.get_clock().now().to_msg()
+            msg.header.frame_id = "earth"
+            msg.twist.linear.x = float(u0[0])
+            msg.twist.linear.y = float(u0[1])
+            msg.twist.linear.z = float(u0[2])
+            msg.twist.angular.z = float(u0[3])
+            self.vel_command_publisher.publish(msg)
         else:
-            dt_wall = wall_now - self._last_tick_wall
-        self._last_tick_wall = wall_now
-
-        # --- tracking errors ---
-        p = x0[0:3]
-        v = x0[3:6]
-        yaw = x0[6]
-        pos_err = float(np.linalg.norm(p - pref))
-        vel_err = float(np.linalg.norm(v - vref))
-        yaw_err = float(self.wrap_pi(yaw - yaw_ref))
-
-        # --- command diagnostics ---
-        du = float(np.linalg.norm(u0 - self._u_prev))
-        self._u_prev = u0.copy()
-
-        sat = [
-            abs(u0[0]) >= 0.95 * self.u_max[0],
-            abs(u0[1]) >= 0.95 * self.u_max[1],
-            abs(u0[2]) >= 0.95 * self.u_max[2],
-            abs(u0[3]) >= 0.95 * self.u_max[3],
-        ]
-
-        # ===== ADD LOGGING =====
-        self.log_writer.writerow([
-            t_ref,
-            p[0], p[1], p[2],
-            v[0], v[1], v[2],
-            yaw,
-            u0[0], u0[1], u0[2], u0[3],
-            pref[0], pref[1], pref[2],
-            vref[0], vref[1], vref[2],
-            yaw_ref,
-            pos_err, vel_err, yaw_err,
-            self._Jmin, self._Jmean, self._Jstd, self._ESS,
-            du, int(sat[0]), int(sat[1]), int(sat[2]), int(sat[3])
-        ])
-        
-        # Flush every 50 ticks (~5 seconds at 0.1s rate)
-        if self._tick_i % 50 == 0:
-            self.log_file.flush()
-        # ===== END LOGGING =====        
-
-        # --- MPPI stats (store these in mppi_optimize) ---
-        # self._Jmin, self._Jmean, self._Jstd, self._ESS
-
-        # self._tick_i += 1
-        # if self._tick_i % self._log_every == 0:
-        #     self.get_logger().info(
-        #         f"dt_wall={dt_wall*1000:5.1f}ms  mppi={((t1-t0)*1000):5.1f}ms  "
-        #         f"e_p={pos_err:4.2f}  e_v={vel_err:4.2f}  e_yaw={yaw_err:4.2f}  "
-        #         f"u=[{u0[0]:+.2f},{u0[1]:+.2f},{u0[2]:+.2f},{u0[3]:+.2f}]  "
-        #         f"du={du:4.2f}  sat={sat}  "
-        #         f"J(min/mean/std)={self._Jmin:.1f}/{self._Jmean:.1f}/{self._Jstd:.1f}  "
-        #         f"ESS={self._ESS:.1f}/{self.mppi_K}"
-        #     )   
-
-        # Publish command
-        msg = TwistStamped()
-        msg.header.stamp = self.get_clock().now().to_msg()
-        msg.header.frame_id = "earth"
-        msg.twist.linear.x = float(u0[0])
-        msg.twist.linear.y = float(u0[1])
-        msg.twist.linear.z = float(u0[2])
-        msg.twist.angular.z = float(u0[3])
-        self.vel_command_publisher.publish(msg)     
+            msg = TwistStamped()
+            msg.header.stamp = self.get_clock().now().to_msg()
+            msg.header.frame_id = 'earth'
+            msg.twist.linear.x = 0.0
+            msg.twist.linear.y = 0.0
+            msg.twist.linear.z = 0.0
+            self.vel_command_publisher.publish(msg)     
   
 
 def main(args=None):
